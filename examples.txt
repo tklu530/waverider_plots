@@ -1,0 +1,329 @@
+
+#einige Beispiele, die am besten ueber copy-paste einzufuegen sind
+
+#1.: 1D-Silbergitter mit Feldplot, Ausschreiben der Daten und elliptischer Polarisation 
+"""
+#Eingangswinkel; in rad anzugeben!
+theta = 30. / 180. * np.pi  #polarer Winkel zur z-Achse
+phi = 40. / 180. * np.pi  #azimuthaler Winkel in Papierebene zur x-Achse im Uhrzeigersinn
+psi = 45. / 180. * np.pi  #Polarisationswinkel zu x' fuer Verhaeltnis E_x' und E_y'
+delta = 30.0 / 180. * np.pi   #Phasenverschiebung fuer die elliptische Polarisation: die y'-Komponente im welleneigenen Koordsys laeuft um Winkel delta
+#der x'-Komponente hinterher:
+
+namount_x = 61   #Gesamtzahl der Beugungsordnungen einer Achse = negative + positive + 0te
+namount_y = 0.   #nur im 2D-Gitterfall benoetigt
+wavelength = 660. #Wellenlaenge der einfallenden Welle
+LAMBDA_x = 1000.  #Periode der Struktur in x-Achsenrichtung
+LAMBDA_y = 0.   #Periode der Struktur in y-Achsenrichtung; nur im 2D-Gitterfall benoetigt
+thickness = 0.  #Dicke der Gesamtstruktur; zu Beginn wird fuer jedes Layer die Dicke thickness/layeramount gesetzt, die dann in set_layer fuer jedes Layer
+#ueberschrieben werden kann
+n1 = 1.0   #Brechungsindex im Raum ueber der Struktur
+n3 = 1.0  #Brechungsindex im Raum unter der Struktur
+layeramount = 4  #Gesamtanzahl an Layern
+
+#TODO: Speedtest zu Multithreading
+
+poly = 1.59   #Material ohne Materialdspersion -> Skalar
+silber = refrind("silber")   #Einlesen eines Materialdispersionsarrays
+
+print("Start")
+time1 = np.datetime64(datetime.datetime.now())
+#Initialisierung des Simmoduls: 1D oder 2D; auf die Argumente achten
+Grating = Layer_stack_1D(namount_x, LAMBDA_x, layeramount, wavelength, psi, phi, theta, delta, namount_y, LAMBDA_y, thickness, n1, n3, filter_type=None, filter_size=0)   
+
+#Layerinitialisierung
+Grating.set_layer(layer_nr=0, struct = np.array([1.]), n=1.0, thickness = 100.)   #Luftschicht zur Darstellung des Feldes
+Grating.set_layer(layer_nr=1, struct = np.array([1.]), n=poly, thickness = 1000.)  
+Grating.set_layer(layer_nr=2, struct = np.array([1.]), n=poly, thickness = 1000.) 
+Grating.set_layer(layer_nr=2, struct = np.array([1.,0.]), n=silber) 
+Grating.set_layer(layer_nr=3, struct = np.array([1.]), n=silber, thickness = 1000.)  
+Grating.plot_struc()  #Darstellung der gesamten Struktur
+
+
+Grating.run(k_out=False, field_orient = 'xy', z_coord=np.array([50.,1550.]), points_nr = 100,show_conv = True)  
+#savedata(Grating.return_arr)   #Abspeichern der Beugungseffizienzen
+Grating.layer_plot(orient='xy',mode='real',print_out=None,index=0)   #Darstellung der Feldberechnung in einer Ebene
+Grating.layer_plot(orient='xy',mode='real',print_out=None,index=1)   #Darstellung der Feldberechnung in einer Ebene
+
+time2 = np.datetime64(datetime.datetime.now())
+print(" ges Zeit:  ", (time2 - time1).item().seconds, "  in sek ")  
+
+#Speicher raeumen
+del Grating   
+"""
+
+
+
+
+#2.: 2D-Struktur Metalinsen mit Hilfsfunktionen zum Erstellen von Strukturen und Feldplots mit NVT
+"""
+#Eingangswinkel; in rad anzugeben!
+theta = np.arange(0.,31.,3.) / 180. * np.pi  #polarer Winkel zur z-Achse
+phi = np.arange(0.,46.,3.) / 180. * np.pi  #azimuthaler Winkel in Papierebene zur x-Achse im Uhrzeigersinn
+psi = 0. / 180. * np.pi  #Polarisationswinkel zu x' fuer Verhaeltnis E_x' und E_y'
+delta = 0.0 / 180. * np.pi   #Phasenverschiebung fuer die elliptische Polarisation: die y'-Komponente im welleneigenen Koordsys laeuft um Winkel delta
+#der x'-Komponente hinterher:
+
+namount_x = 13   #Gesamtzahl der Beugungsordnungen einer Achse = negative + positive + 0te
+namount_y = 13   #nur im 2D-Gitterfall benoetigt
+wavelength = np.linspace(400.,700,7) #Wellenlaenge der einfallenden Welle
+LAMBDA_x = 250.  #Periode der Struktur in x-Achsenrichtung
+LAMBDA_y = 250.   #Periode der Struktur in y-Achsenrichtung; nur im 2D-Gitterfall benoetigt
+thickness = 0.  #Dicke der Gesamtstruktur; zu Beginn wird fuer jedes Layer die Dicke thickness/layeramount gesetzt, die dann in set_layer fuer jedes Layer
+#ueberschrieben werden kann
+n1 = 1.0   #Brechungsindex im Raum ueber der Struktur
+n3 = 1.0  #Brechungsindex im Raum unter der Struktur
+layeramount = 4  #Gesamtanzahl an Layern
+
+#TODO: Speedtest zu Multithreading
+#TODO: Periodizitaet Fieldplots?
+
+glass = 1.5163  #BK7 aus refr ind info
+TiO2 = refrind("TiO2")
+
+print("Start")
+time1 = np.datetime64(datetime.datetime.now())
+
+#braucht aktuell 6.5 Stunden
+for diameter in np.arange(100.,231.,10.):
+    
+    print("aktueller Durchmesser: ", diameter)
+    circle, nx, ny = create_ellipse((LAMBDA_y,LAMBDA_x),diameter/2.,diameter/2., Rot=0., trans=(0,0), NV=True, Plot=False)
+
+    nanopillar = Layer_stack_2D(namount_x, LAMBDA_x, layeramount, wavelength, psi, phi, theta, delta, namount_y, LAMBDA_y, thickness, n1, n3, filter_type=None, filter_size=0)   
+    
+    nanopillar.set_layer(layer_nr=0, struct = np.array([[1.]]), n=1., thickness = 100.)   #Luft 
+    nanopillar.set_layer(layer_nr=1, struct = np.array([[1.]]), n=glass, thickness = 1000.)   #Glass   
+    nanopillar.set_layer(layer_nr=2, struct = circle, n=TiO2, thickness = 600.)  #Zylinder
+    nanopillar.set_layer(layer_nr=3, struct = np.array([[1.]]), n=1., thickness = 100.)   #Luft
+    #nanopillar.plot_struc(layer=2)
+
+    nanopillar.set_2D_layer_NV(layer=2, nx=nx, ny=ny)
+    
+    #nanopillar.show_convergence(namount_points=5, namount_start=7, namount_end=15)
+    nanopillar.run(k_out = False, field_orient = 'xy', z_coord=np.array([0.,1800.]), points_nr = 20, \
+                                                                        show_conv = True, param1_str = 'wavelength', param2_str = 'theta', param3_str = 'phi')
+    nanopillar.layer_plot(orient='xy',mode='Abs Ampl',component='x',print_out='Efield_R_ohne_ein_' + str(diameter),index=0)   #Darstellung der Feldberechnung in einer Ebene
+    nanopillar.layer_plot(orient='xy',mode='Abs Ampl',component='x',print_out='Efield_T_' + str(diameter),index=1)   #Darstellung der Feldberechnung in einer Ebene
+    savedata(return_arr=nanopillar.return_arr,path=str(diameter),mode='bin',component='x')
+    savedata(return_arr=nanopillar.return_arr,path=str(diameter),mode='bin',component='y')
+    savedata(return_arr=nanopillar.return_arr,path=str(diameter),mode='bin',component='z')
+
+time2 = np.datetime64(datetime.datetime.now())
+print(" ges Zeit:  ", (time2 - time1).item().seconds, "  in sek ")  
+
+#Speicher raeumen
+del nanopillar
+"""
+
+
+
+#3.: 2D-Struktur mit Felddarstellung
+"""
+#Eingangswinkel; in rad anzugeben!
+theta = 30. / 180. * np.pi  #polarer Winkel zur z-Achse
+phi = 40. / 180. * np.pi  #azimuthaler Winkel in Papierebene zur x-Achse im Uhrzeigersinn
+psi = 45. / 180. * np.pi  #Polarisationswinkel zu x' fuer Verhaeltnis E_x' und E_y'
+delta = 20.0 / 180. * np.pi   #Phasenverschiebung fuer die elliptische Polarisation: die y'-Komponente im welleneigenen Koordsys laeuft um Winkel delta
+#der x'-Komponente hinterher:
+
+namount_x = 25   #Gesamtzahl der Beugungsordnungen einer Achse = negative + positive + 0te
+namount_y = 25   #nur im 2D-Gitterfall benoetigt
+wavelength = 660. #Wellenlaenge der einfallenden Welle
+LAMBDA_x = 1000.  #Periode der Struktur in x-Achsenrichtung
+LAMBDA_y = 1000.   #Periode der Struktur in y-Achsenrichtung; nur im 2D-Gitterfall benoetigt
+thickness = 0.  #Dicke der Gesamtstruktur; zu Beginn wird fuer jedes Layer die Dicke thickness/layeramount gesetzt, die dann in set_layer fuer jedes Layer
+#ueberschrieben werden kann
+n1 = 1.0   #Brechungsindex im Raum ueber der Struktur
+n3 = 1.0  #Brechungsindex im Raum unter der Struktur
+layeramount = 2  #Gesamtanzahl an Layern
+
+#TODO: Speedtest zu Multithreading
+
+gold = refrind("gold")   #Einlesen eines Materialdispersionsarrays
+
+print("Start")
+time1 = np.datetime64(datetime.datetime.now())
+#Initialisierung des Simmoduls: 1D oder 2D; auf die Argumente achten
+Gauss = Layer_stack_2D(namount_x, LAMBDA_x, layeramount, wavelength, psi, phi, theta, delta, namount_y, LAMBDA_y, thickness, n1, n3, filter_type=None, filter_size=0)   
+
+Klotz = np.array([[0.,0.,0.,0.,],
+                  [0.,1.,1.,0.],
+                  [0.,1.,1.,0.],
+                  [0.,0.,0.,0.]])
+
+#Layerinitialisierung
+Gauss.set_layer(layer_nr=0, struct = Klotz, n=gold, thickness = 1000.)  
+Gauss.set_layer(layer_nr=1, struct = np.array([[1.]]), n=1.0, thickness = 100.)   #Luftschicht zur Darstellung des Feldes
+Gauss.plot_struc(layer=0, wavelength = 420.)
+
+
+Gauss.run(k_out=False, field_orient = 'xy', z_coord=np.array([1050.]), points_nr = 100,show_conv = True)  #Feldausgabe in der Mitte der Luftschicht
+#savedata(Gauss.return_arr)   #Abspeichern der Beugungseffizienzen
+Gauss.layer_plot(orient='xy',mode='real',print_out='None')   #Darstellung der Feldberechnung in einer Ebene
+
+time2 = np.datetime64(datetime.datetime.now())
+print(" ges Zeit:  ", (time2 - time1).item().seconds, "  in sek ")  
+
+#Speicher raeumen
+del Gauss 
+"""
+
+
+
+
+#4.: 1D-Beispiel mit Konvergenzuntersuchung fuer namount, Parametersweep und Beugungseffizienzplot, elliptische Polarisation
+"""
+#Eingangswinkel; in rad anzugeben!
+theta = 30. / 180. * np.pi  #polarer Winkel zur z-Achse
+phi = 40. / 180. * np.pi  #azimuthaler Winkel in Papierebene zur x-Achse im Uhrzeigersinn
+psi = 45. / 180. * np.pi  #Polarisationswinkel zu x' fuer Verhaeltnis E_x' und E_y'
+delta = 45.0 / 180. * np.pi   #Phasenverschiebung fuer die elliptische Polarisation: die y'-Komponente im welleneigenen Koordsys laeuft um Winkel delta
+#der x'-Komponente hinterher:
+
+namount_x = 61   #Gesamtzahl der Beugungsordnungen einer Achse = negative + positive + 0te
+namount_y = 0   #nur im 2D-Gitterfall benoetigt
+wavelength = np.arange(400.,801.,5) #Wellenlaenge der einfallenden Welle
+LAMBDA_x = 1200.  #Periode der Struktur in x-Achsenrichtung
+LAMBDA_y = 0.   #Periode der Struktur in y-Achsenrichtung; nur im 2D-Gitterfall benoetigt
+thickness = 1000.  #Dicke der Gesamtstruktur; zu Beginn wird fuer jedes Layer die Dicke thickness/layeramount gesetzt, die dann in set_layer fuer jedes Layer
+#ueberschrieben werden kann
+n1 = 1.0   #Brechungsindex im Raum ueber der Struktur
+n3 = 1.0  #Brechungsindex im Raum unter der Struktur
+layeramount = 50  #Gesamtanzahl an Layern
+
+#TODO: Speedtest zu Multithreading
+#TODO: Periodizitaet Fieldplots?
+
+param = refrind('iron')
+
+print("Start")
+time1 = np.datetime64(datetime.datetime.now())
+
+Test = Layer_stack_1D(namount_x, LAMBDA_x, layeramount, wavelength, psi, phi, theta, delta, namount_y, LAMBDA_y, thickness, n1, n3, filter_type=None, filter_size=0)
+
+Test.set_stack(n=param,path='Goldzelle.png')  #exemplarisches Einlesen eines Bildes als Struktur eines Materials -> set_stack auch mehrmals verwendbar -> Hierarchie
+Test.plot_struc(wavelength = 480.)
+
+Test.show_convergence(wavelength = 550.)  #Konvergenzplot: ueblicherweise zu empfehlen, um abschaetzen zu koennen, wie viele Beugungsordnungen in der Simulation fuer
+#eine konvergente Loesung noetig sind; von etwaigen Formelabschaetzungen ist abzuraten!
+
+Test.run(k_out=True,show_conv = True, param1_str = 'wavelength')  #k_out noetig, um Wellenvektorkomponenten in angle_plot nutzen zu koennen
+#param1_str als Parameter, ueber welchen iteriert wird
+Test.DEplot(-2,-1,0,1,2, param1_str = 'wavelength', type_str='R+T', print_out=None)  #Plot und Ausschreiben der Beugungsordnungen -1, 0 und 1, wobei reflektiver und 
+#transmittiver Anteil addiert werden
+
+Test.angle_plot(param1_str = 'wavelength')  #Plot der Beugungsordnungen im Winkelraum ueber den Simulationsparameter
+
+time2 = np.datetime64(datetime.datetime.now())
+print(" ges Zeit:  ", (time2 - time1).item().seconds, "  in sek ")  
+
+#Speicher raeumen
+del Test 
+"""
+
+
+
+
+#5.: 2D-Beispiel mit NV-Transformation und daraus Konvergenzuntersuchung fuer namount
+"""
+#Eingangswinkel; in rad anzugeben!
+theta = 0. / 180. * np.pi  #polarer Winkel zur z-Achse; letzter Wert 88
+phi = 0. / 180. * np.pi  #azimuthaler Winkel in Papierebene zur x-Achse im Uhrzeigersinn
+psi = 0. / 180. * np.pi  #Polarisationswinkel zu x' fuer Verhaeltnis E_x' und E_y'
+delta = 0.0 / 180. * np.pi   #Phasenverschiebung fuer die elliptische Polarisation: die y'-Komponente im welleneigenen Koordsys laeuft um Winkel delta
+#der x'-Komponente hinterher:
+
+namount_x = 31   #Gesamtzahl der Beugungsordnungen einer Achse = negative + positive + 0te
+namount_y = 31   #nur im 2D-Gitterfall benoetigt
+wavelength = 550. #Wellenlaenge der einfallenden Welle
+LAMBDA_x = 1000.  #Periode der Struktur in x-Achsenrichtung
+LAMBDA_y = 1000.   #Periode der Struktur in y-Achsenrichtung; nur im 2D-Gitterfall benoetigt
+thickness = 0.  #Dicke der Gesamtstruktur; zu Beginn wird fuer jedes Layer die Dicke thickness/layeramount gesetzt, die dann in set_layer fuer jedes Layer
+#ueberschrieben werden kann
+n1 = 1.0   #Brechungsindex im Raum ueber der Struktur
+n3 = 1.0  #Brechungsindex im Raum unter der Struktur
+layeramount = 2  #Gesamtanzahl an Layern
+
+#TODO: Speedtest zu Multithreading
+#TODO: Annotation zur Strukturhierarchie und Synthese; 0 und 1
+
+gold = refrind("gold")
+square, nx, ny = create_square((60.,60.),30.,20., Rot=30., trans=(0,0), NV=True, Plot=False)
+
+
+print("start")
+
+time1 = np.datetime64(datetime.datetime.now())
+NV_Test = Layer_stack_2D(namount_x, LAMBDA_x, layeramount, wavelength, psi, phi, theta, delta, namount_y, LAMBDA_y, thickness, n1, n3, filter_type=None, filter_size=0)   
+
+NV_Test.set_layer(layer_nr=0, struct = np.array([[1.]]), n=1., thickness = 100.)   #Luft    
+NV_Test.set_layer(layer_nr=1, struct = square, n=gold, thickness = 500.)  
+NV_Test.plot_struc(layer=1)
+NV_Test.set_2D_layer_NV(layer=1, nx=nx, ny=ny)  #zum Testen empfiehlt sich einmal ohne und einmal mit NVT -> diese Zeile auskommentieren
+
+NV_Test.show_convergence(namount_points=13, namount_start=7, namount_end=31)
+
+time2 = np.datetime64(datetime.datetime.now())
+print(" ges Zeit:  ", (time2 - time1).item().seconds, "  in sek ")   
+
+#Speicher raeumen
+del NV_Test
+"""  
+
+
+
+
+#6.: 2D-Beispiel mit NV-Transformation und doppeltem xy-Plot
+"""
+#Eingangswinkel; in rad anzugeben!
+theta = 30. / 180. * np.pi  #polarer Winkel zur z-Achse
+phi = 40. / 180. * np.pi  #azimuthaler Winkel in Papierebene zur x-Achse im Uhrzeigersinn
+psi = 45. / 180. * np.pi  #Polarisationswinkel zu x' fuer Verhaeltnis E_x' und E_y'
+delta = 90.0 / 180. * np.pi   #Phasenverschiebung fuer die elliptische Polarisation: die y'-Komponente im welleneigenen Koordsys laeuft um Winkel delta
+#der x'-Komponente hinterher:
+
+namount_x = 25   #Gesamtzahl der Beugungsordnungen einer Achse = negative + positive + 0te
+namount_y = 25   #nur im 2D-Gitterfall benoetigt
+wavelength = 660. #Wellenlaenge der einfallenden Welle
+LAMBDA_x = 1000.  #Periode der Struktur in x-Achsenrichtung
+LAMBDA_y = 1000.   #Periode der Struktur in y-Achsenrichtung; nur im 2D-Gitterfall benoetigt
+thickness = 0.  #Dicke der Gesamtstruktur; zu Beginn wird fuer jedes Layer die Dicke thickness/layeramount gesetzt, die dann in set_layer fuer jedes Layer
+#ueberschrieben werden kann
+n1 = 1.0   #Brechungsindex im Raum ueber der Struktur
+n3 = 1.0  #Brechungsindex im Raum unter der Struktur
+layeramount = 3  #Gesamtanzahl an Layern
+
+#TODO: Speedtest zu Multithreading
+
+gold = refrind("gold")   #Einlesen eines Materialdispersionsarrays
+
+print("Start")
+time1 = np.datetime64(datetime.datetime.now())
+#Initialisierung des Simmoduls: 1D oder 2D; auf die Argumente achten
+Gauss = Layer_stack_2D(namount_x, LAMBDA_x, layeramount, wavelength, psi, phi, theta, delta, namount_y, LAMBDA_y, thickness, n1, n3, filter_type=None, filter_size=0)   
+
+Klotz, nx, ny = create_square((80.,80.),40.,40., Rot=0., trans=(0,0), NV=True, Plot=True)
+
+#Layerinitialisierung
+Gauss.set_layer(layer_nr=0, struct = np.array([[1.]]), n=1.0, thickness = 100.)   #Luftschicht zur Darstellung des Feldes
+Gauss.set_layer(layer_nr=1, struct = Klotz, n=gold, thickness = 1000.)  
+Gauss.set_layer(layer_nr=2, struct = np.array([[1.]]), n=1.0, thickness = 100.)   #Luftschicht zur Darstellung des Feldes
+Gauss.plot_struc(layer=1, wavelength = wavelength)
+Gauss.set_2D_layer_NV(layer=1, nx=nx, ny=ny)
+
+Gauss.run(k_out=False, field_orient = 'xy', z_coord=np.array([50.,1150.]), points_nr = 100,show_conv = True)  #Feldausgabe in der Mitte der Luftschicht
+#savedata(Gauss.return_arr)   #Abspeichern der Beugungseffizienzen
+Gauss.layer_plot(orient='xy',mode='real',print_out=None,index=0)   #Darstellung der Feldberechnung in einer Ebene
+Gauss.layer_plot(orient='xy',mode='real',print_out=None,index=1)   #Darstellung der Feldberechnung in einer Ebene
+
+time2 = np.datetime64(datetime.datetime.now())
+print(" ges Zeit:  ", (time2 - time1).item().seconds, "  in sek ") 
+
+#Speicher raeumen
+del Gauss
+"""
+
+
+
+
